@@ -9,6 +9,9 @@ import {
     BaseChannel,
     BaseInteraction,
     Channel,
+    ComponentType,
+    ContainerBuilder,
+    ContainerComponentBuilder,
     EmbedBuilder,
     Guild,
     GuildEmoji,
@@ -20,6 +23,7 @@ import {
     InteractionReplyOptions,
     Invite,
     Message,
+    MessageActionRowComponentBuilder,
     MessageMentionOptions,
     MessageReaction,
     MessageReplyOptions,
@@ -27,18 +31,16 @@ import {
     PollData,
     Presence,
     Role,
+    SoundboardSound,
     Sticker,
     StickerResolvable,
     TextChannel,
-    TextInputBuilder,
     ThreadChannelResolvable,
     User,
     VoiceState,
     WebhookClient,
 } from "discord.js"
 import noop from "../../functions/noop"
-import { ForgeClient } from "../../core"
-import { RawMessageData } from "discord.js/typings/rawDataTypes"
 import { MessageFlags } from "discord.js"
 
 export type Sendable =
@@ -59,11 +61,14 @@ export type Sendable =
     | MessageReaction
     | Invite
     | AutoModerationActionExecution
+    | SoundboardSound
 
 export class Container {
     public content?: string
     public embeds = new Array<EmbedBuilder>()
-    public components = new Array<ActionRowBuilder<AnyComponentBuilder>>()
+    public components = new Array<ActionRowBuilder<AnyComponentBuilder> | ContainerBuilder | ContainerComponentBuilder>()
+    public actionRow?: ActionRowBuilder<MessageActionRowComponentBuilder>
+    public inside = Array<ComponentType>()
     public reference?: string
     public reply = false
     public followUp = false
@@ -71,6 +76,7 @@ export class Container {
     public ephemeral = false
     public tts = false
     public update = false
+    public isComponentsV2 = false
     public files = new Array<AttachmentBuilder>()
     public channel?: Channel
     public stickers = new Array<StickerResolvable>()
@@ -161,6 +167,15 @@ export class Container {
         return (this.embeds[index] ??= new EmbedBuilder())
     }
 
+    /**
+     * Checks if current context is inside a component builder function.
+     * @param type The type of the component to check for.
+     * @returns 
+     */
+    public isInside(type: ComponentType) {
+        return this.inside.includes(type)
+    }
+
     public reset() {
         delete this.channel
         delete this.content
@@ -173,6 +188,7 @@ export class Container {
         delete this.threadName
         delete this.appliedTags
         delete this.deleteIn
+        delete this.actionRow
 
         this.followUp = false
         this.reply = false
@@ -181,10 +197,12 @@ export class Container {
         this.withResponse = false
         this.edit = false
         this.tts = false
+        this.isComponentsV2 = false
 
         this.stickers.length = 0
         this.choices.length = 0
         this.components.length = 0
+        this.inside.length = 0
         this.embeds.length = 0
         this.files.length = 0
 
@@ -192,6 +210,12 @@ export class Container {
     }
 
     public getOptions<T>(content?: string): T {
+        if (this.actionRow) this.components.push(this.actionRow)
+
+        const flags = new Array<MessageFlags>()
+        if (this.ephemeral) flags.push(MessageFlags.Ephemeral)
+        if (this.isComponentsV2) flags.push(MessageFlags.IsComponentsV2)
+
         return (
             content
                 ? {
@@ -210,7 +234,7 @@ export class Container {
                                 failIfNotExists: false,
                             }
                           : undefined,
-                      flags: this.ephemeral ? MessageFlags.Ephemeral : undefined,
+                      flags: flags.length === 0 ? undefined : flags,
                       attachments: [],
                       files: this.files.length === 0 ? null : this.files,
                       stickers: this.stickers.length === 0 ? null : this.stickers,

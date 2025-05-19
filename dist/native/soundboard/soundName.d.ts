@@ -3,15 +3,15 @@ declare const _default: NativeFunction<[{
     name: string;
     description: string;
     rest: false;
+    type: ArgType.Guild;
     required: true;
-    type: ArgType.Channel;
 }, {
     name: string;
     description: string;
-    pointer: number;
     rest: false;
-    type: ArgType.Message;
     required: true;
+    type: ArgType.SoundboardSound;
+    pointer: number;
 }], true>;
 export default _default;
-//# sourceMappingURL=fetchRows.d.ts.map
+//# sourceMappingURL=soundName.d.ts.map
